@@ -2,7 +2,7 @@
 
 本包只更新 `spx-cursor` 插件，不更换 CPA 镜像。它修复错误详情透传、有效结束帧识别和已接收帧中的 usage/cache 丢失；不承诺提升上游缓存命中率或降低延迟。默认传输仍为 `http1`。
 
-本次 Linux 包适用于 Linux AMD64、glibc 环境，已在 CPA v8.0.66 官方 Debian Bookworm 镜像验证。准确构建环境、glibc 要求、源码提交和 SHA-256 见同目录 `BUILDINFO.json`、`SHA256SUMS`。不要用于 ARM64 或 Alpine/musl；Windows 包也不能放入 Linux Pod。
+本次 Linux 包适用于 **Linux AMD64、glibc 2.34 或更高版本**，使用 Debian Bookworm 工具链构建；它不是 manylinux/glibc 2.17 包。CPA v8.0.66 官方 Debian Bookworm 镜像符合此要求。准确构建环境、源码提交、实测结果和 SHA-256 见同目录 `BUILDINFO.json`、`SHA256SUMS`。不要用于 ARM64 或 Alpine/musl；Windows 包也不能放入 Linux Pod。
 
 ## CPA 能否导入本地插件
 
