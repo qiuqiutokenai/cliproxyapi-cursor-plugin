@@ -17,7 +17,7 @@ plugins:
   enabled: true
   dir: /opt/cpa/plugins
   store-sources:
-    - "https://raw.githubusercontent.com/spancerxing/cliproxyapi-cursor-plugin/main/registry.json"
+    - "https://raw.githubusercontent.com/qiuqiutokenai/cliproxyapi-cursor-plugin/main/registry.json"
 ```
 
 在 CPA 商城安装 **Cursor**。发布构建覆盖 Linux AMD64/ARM64、macOS AMD64/ARM64 和 Windows AMD64，
@@ -29,7 +29,7 @@ Docker 部署请挂载可写的插件目录。官方索引收录后可省略第�
 需要 Go 1.23+、C 编译器和 Make。在与 CPA 相同的系统、CPU 架构下执行：
 
 ```sh
-git clone https://github.com/spancerxing/cliproxyapi-cursor-plugin.git
+git clone https://github.com/qiuqiutokenai/cliproxyapi-cursor-plugin.git
 cd cliproxyapi-cursor-plugin
 make build
 ```

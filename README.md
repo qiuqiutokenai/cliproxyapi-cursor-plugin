@@ -18,7 +18,7 @@ plugins:
   enabled: true
   dir: /opt/cpa/plugins
   store-sources:
-    - "https://raw.githubusercontent.com/spancerxing/cliproxyapi-cursor-plugin/main/registry.json"
+    - "https://raw.githubusercontent.com/qiuqiutokenai/cliproxyapi-cursor-plugin/main/registry.json"
 ```
 
 Install **Cursor** in CPA's store. Release builds target Linux AMD64/ARM64,
@@ -31,7 +31,7 @@ Once listed in the official registry, the third-party source is optional.
 Requires Go 1.23+, a C compiler and Make. Build on the same OS and CPU architecture as CPA:
 
 ```sh
-git clone https://github.com/spancerxing/cliproxyapi-cursor-plugin.git
+git clone https://github.com/qiuqiutokenai/cliproxyapi-cursor-plugin.git
 cd cliproxyapi-cursor-plugin
 make build
 ```

@@ -17,7 +17,7 @@ import (
 
 const version = "0.1.4"
 const pluginID = "spx-cursor"
-const pluginLogo = "https://raw.githubusercontent.com/spancerxing/cliproxyapi-cursor-plugin/main/assets/cursor.png"
+const pluginLogo = "https://raw.githubusercontent.com/qiuqiutokenai/cliproxyapi-cursor-plugin/main/assets/cursor.png"
 const cursorAPI = "https://api2.cursor.sh"
 const clientVersion = "cli-2026.09.23-86fc751"
 const maxWireBytes = 64 << 20
@@ -279,7 +279,7 @@ func dispatch(p *pluginRuntime, method string, raw json.RawMessage, host hostCal
 	return resultEnvelope(value)
 }
 func registration() any {
-	return map[string]any{"schema_version": 1, "metadata": map[string]any{"Name": "Cursor", "Version": version, "Author": "spx", "GitHubRepository": "https://github.com/spancerxing/cliproxyapi-cursor-plugin", "Logo": pluginLogo, "ConfigFields": []any{map[string]any{"Name": "http-transport", "Type": "enum", "Default": "http1", "EnumValues": []string{"http1", "host-default"}, "Description": "HTTP transport: http1 preserves compatibility; host-default delegates protocol negotiation and connection reuse to CPA."}}}, "capabilities": map[string]any{"management_api": true, "auth_provider": true, "model_provider": true, "quota_provider": true, "executor": true, "executor_model_scope": "oauth", "executor_input_formats": []string{"chat-completions"}, "executor_output_formats": []string{"chat-completions"}}}
+	return map[string]any{"schema_version": 1, "metadata": map[string]any{"Name": "Cursor", "Version": version, "Author": "spx", "GitHubRepository": "https://github.com/qiuqiutokenai/cliproxyapi-cursor-plugin", "Logo": pluginLogo, "ConfigFields": []any{map[string]any{"Name": "http-transport", "Type": "enum", "Default": "http1", "EnumValues": []string{"http1", "host-default"}, "Description": "HTTP transport: http1 preserves compatibility; host-default delegates protocol negotiation and connection reuse to CPA."}}}, "capabilities": map[string]any{"management_api": true, "auth_provider": true, "model_provider": true, "quota_provider": true, "executor": true, "executor_model_scope": "oauth", "executor_input_formats": []string{"chat-completions"}, "executor_output_formats": []string{"chat-completions"}}}
 }
 func randomID() string {
 	var b [16]byte
