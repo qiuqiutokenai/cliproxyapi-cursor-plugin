@@ -5,6 +5,10 @@ Uses CPA's global proxy and request logging. Native Go plugin; no Node.js runtim
 
 [中文说明](README_CN.md)
 
+Version `0.1.4` fixes stream error details and preserves usage/cache counters
+already received in a Cursor frame. See [release notes](docs/release-0.1.4.md)
+for the validation scope and custom-build installation limits.
+
 ## Store installation
 
 After a Release is published, add this third-party source:
@@ -139,7 +143,9 @@ make test
 ```
 
 See [VALIDATION.md](VALIDATION.md) for verification scope and limitations.
-Real Cursor accounts and full CPA integration have not yet been tested.
+The implementation preceding the `0.1.4` version change was tested with real
+GPT-5.1 and Gemini requests through CPA v8.0.66. These small probes establish
+functional compatibility, not a guaranteed cache hit rate or latency improvement.
 Based on the MIT-licensed [magpie Cursor plugin](https://github.com/magpie-community/plugins/tree/main/packages/cursor); see [NOTICE.md](NOTICE.md) for attribution.
 
 See [docs/publishing.md](docs/publishing.md) for releases and official store submission.

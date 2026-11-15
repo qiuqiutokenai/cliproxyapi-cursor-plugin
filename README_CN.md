@@ -5,6 +5,9 @@ Go 原生插件，运行时无需 Node.js。
 
 [English](README.md)
 
+`0.1.4` 修复流错误详情，并保留 Cursor 当前已接收帧中的真实 usage/cache 计数。
+验证范围和自编译版本安装限制见 [发布说明](docs/release-0.1.4.md)。
+
 ## 商城安装
 
 Release 发布后，可添加本仓库的第三方商城源：
@@ -125,7 +128,8 @@ curl "http://127.0.0.1:8317/v8/management/oauth/status?state=$STATE" \
 make test
 ```
 
-验证范围与限制见 [VALIDATION.md](VALIDATION.md)。真实 Cursor 账号和完整 CPA 联调尚未验证。
+验证范围与限制见 [VALIDATION.md](VALIDATION.md)。本次版本号更新前的实现已通过 CPA v8.0.66
+完成真实 GPT-5.1 和 Gemini 请求验证；小样本只说明功能可用，不保证缓存命中率或延迟改善。
 参考 [magpie Cursor 插件](https://github.com/magpie-community/plugins/tree/main/packages/cursor) 移植，采用 MIT 许可证，来源见 [NOTICE.md](NOTICE.md)。
 
 发布与官方索引提交流程见 [docs/publishing.md](docs/publishing.md)。

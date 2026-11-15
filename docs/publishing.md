@@ -14,25 +14,26 @@ Linux 使用 manylinux2014 工具链，目标为 glibc 2.17+，适用于官方 D
 
 ```sh
 git push origin main
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
 GitHub Actions 会执行测试、各平台 C ABI 加载、ZIP 格式检查，并发布：
 
 ```text
-spx-cursor_0.1.3_linux_amd64.zip
-spx-cursor_0.1.3_linux_arm64.zip
-spx-cursor_0.1.3_darwin_amd64.zip
-spx-cursor_0.1.3_darwin_arm64.zip
-spx-cursor_0.1.3_windows_amd64.zip
+spx-cursor_0.1.4_linux_amd64.zip
+spx-cursor_0.1.4_linux_arm64.zip
+spx-cursor_0.1.4_darwin_amd64.zip
+spx-cursor_0.1.4_darwin_arm64.zip
+spx-cursor_0.1.4_windows_amd64.zip
 checksums.txt
 ```
 
 版本标签必须匹配代码和索引。仅推送代码、手动运行工作流不会创建 Release。
 工作流使用仓库自带的 `GITHUB_TOKEN`，无需将个人令牌写入文件。
 标签构建全部通过后，工作流创建 Release；若同名 Release 已存在，则替换安装包和校验文件。
-本次模型列表改用 desktop 身份（PR #3）发布为 `v0.1.3`，保留已有版本的标签和 Release。
+`v0.1.4` 包含错误状态透传、有效结束帧识别、已接收帧 usage/cache 保留和可选宿主传输配置。
+这些修改改善错误处理与计量可靠性，不承诺提升上游缓存命中率或降低延迟。
 后续发布继续递增版本，便于已安装的 CPA 识别更新。
 
 ## 官方商城索引
