@@ -326,7 +326,6 @@ func connectError(status int, raw []byte, retryAfterHint ...int) error {
 		credentialScoped = credentialScoped || status == http.StatusUnauthorized
 	case code == "model_blocked" || code == "model_not_found":
 		status = http.StatusNotFound
-		code = "model_not_found"
 	case code == "permission_denied":
 		status = http.StatusForbidden
 	case code == "unauthenticated":
@@ -372,7 +371,7 @@ func successfulEndMetadata(m map[string]any) bool {
 	for key, value := range m {
 		switch key {
 		case "metadata":
-			if object(value) == nil {
+			if value != nil && object(value) == nil {
 				return false
 			}
 		case "error":
