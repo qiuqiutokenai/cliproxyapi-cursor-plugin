@@ -93,7 +93,7 @@ kubectl -n <namespace> rollout status deployment/<cpa-deployment>
 
 1. `GET /v8/management/plugins` 或插件列表显示 `spx-cursor` 已注册，Version 为 **0.1.4**，路径为目标 `spx-cursor-v0.1.4.so`。
 2. 容器内文件 SHA-256 与交付库一致，启动日志没有插件加载/ABI 错误。
-3. `/v1/models` 含预期 Cursor 模型，一条流式请求有正文、结束原因、`[DONE]` 和 usage。
+3. 先确认 `/v1/models` 含请求使用的精确 Cursor 模型 ID，再发送一条流式请求，确认正文、结束原因、`[DONE]` 和 usage。Pod Ready 不代表账号和模型注册已完成；本次隔离验证曾在就绪后立即请求得到 400，精确模型已列出后补测成功，原始错误体未保留，因此不把失败原因断言为仅由启动时序造成。
 
 保留当前 `http1`。`host-default` 会让 CPA 自行协商协议，但不强制 HTTP/2，也不自动建立插件连接池。本次发布验证没有证明它能改善实际连接复用或慢请求。
 
