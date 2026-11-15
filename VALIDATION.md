@@ -29,6 +29,24 @@ Cursor accepts RunSSE/BidiAppend over HTTP/2, or that switching transport reduce
 remote 503s. Native retained Runs and deferred dashboard accounting are outside
 this change.
 
+## Completed-frame usage preservation
+
+The decoder consumes all fields in an already received Connect frame before
+finishing a turn or returning a completed caller-tool batch. Previously a tool
+batch could return before a later TurnEnded update in that frame, replacing its
+authoritative token and cache counters with estimates; an earlier TurnEnded
+could also incorrectly reject tool calls or text later in the same frame.
+Protocol errors later in a completed frame now remain errors.
+
+Synthetic regression tests cover all six tool/batch/TurnEnded field orders,
+nested interaction updates, cache reads and writes, fully cached input,
+authoritative zero counters, and streaming/non-streaming client output. A reader
+that rejects any read after the completed frame verifies that this adds no wait
+for another frame. Ordinary tool handoffs without TurnEnded still return
+immediately with explicitly estimated usage. This change adds no dashboard
+requests, deferred accounting ledger, or cross-request Run retention, and cannot
+recover counters that Cursor has not sent or change upstream cache hit rates.
+
 ## Browser renewal follow-up (2026-11-04)
 
 PR #2 adds browser-token renewal through CPA's refresh scheduler. The merged

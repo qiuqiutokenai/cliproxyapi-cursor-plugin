@@ -429,13 +429,6 @@ func (st *runState) decode(reader io.Reader, send func([]byte) error, emit func(
 					case 14:
 						st.ended = true
 						st.usage = usageFromFields(fs)
-						if st.calls == 0 {
-							if st.wrote == 0 {
-								return failure(502, "Cursor ended a turn without text or tool calls")
-							}
-							emit(st.finished())
-							return nil
-						}
 					case 27:
 						n := pbNum(fs, 1)
 						if f := pbGet(fs, 1); f == nil || f.wire != 0 || n == 0 || n > 100000 {
@@ -492,14 +485,20 @@ func (st *runState) decode(reader io.Reader, send func([]byte) error, emit func(
 					}
 				}
 			}
-			if done() {
-				if st.calls > 0 {
-					emit(st.finished())
-					return nil
-				}
+			if done() && st.calls == 0 {
 				st.listed = 0
 				st.answered = 0
 			}
+		}
+		// Finish only after consuming this frame's fields: a later update may
+		// carry authoritative usage, another tool call, or a protocol error.
+		// Never wait for another frame after a completed caller tool batch.
+		if st.ended && st.calls == 0 || done() && st.calls > 0 {
+			if st.wrote == 0 && st.calls == 0 {
+				return failure(502, "Cursor ended a turn without text or tool calls")
+			}
+			emit(st.finished())
+			return nil
 		}
 	}
 }
