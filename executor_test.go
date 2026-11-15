@@ -137,7 +137,7 @@ func TestNativeConnectErrorPreservesStructuredDetails(t *testing.T) {
 		{name: "unauthenticated", status: 401, body: `{"error":{"code":"unauthenticated","message":"Invalid User API Key"}}`, wantStatus: 401, wantCode: "unauthenticated", wantCredential: true},
 		{name: "permission denied", status: 403, body: `{"error":{"code":"permission_denied","message":"forbidden"}}`, wantStatus: 403, wantCode: "permission_denied"},
 		{name: "resource exhausted", status: 429, body: `{"error":{"code":"resource_exhausted","message":"quota exceeded","retry_after_seconds":19}}`, wantStatus: 429, wantCode: "resource_exhausted", wantRetryable: true, wantRetryAfter: 19},
-		{name: "account quota", status: 429, body: `{"error":{"code":"resource_exhausted","message":"account-wide quota exceeded"}}`, wantStatus: 429, wantCode: "resource_exhausted", wantRetryable: true, wantCredential: true},
+		{name: "explicit account quota", status: 429, body: `{"error":{"code":"resource_exhausted","message":"account-wide quota exceeded","credential_scoped":true}}`, wantStatus: 429, wantCode: "resource_exhausted", wantRetryable: true, wantCredential: true},
 		{name: "unknown service code", status: 503, body: `{"error":{"code":"backend_overloaded","message":"try again"}}`, wantStatus: 503, wantCode: "backend_overloaded", wantRetryable: true},
 		{name: "model blocked end frame", status: 200, body: `{"code":"model_blocked","message":"Model Blocked: ask your admin to enable access to Claude Fable 5."}`, wantStatus: 404, wantCode: "model_not_found"},
 		{name: "nested model blocked end frame", status: 200, body: `{"error":{"message":"Model Blocked: Please ask your admin to enable access"}}`, wantStatus: 404, wantCode: "model_not_found"},

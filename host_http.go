@@ -273,6 +273,9 @@ func connectError(status int, raw []byte, retryAfterHint ...int) error {
 	if m == nil {
 		m = map[string]any{}
 	}
+	if originalStatus >= 200 && originalStatus < 300 && successfulEndMetadata(m) {
+		return nil
+	}
 	root := m
 	if nested := object(m["error"]); nested != nil {
 		root = nested
@@ -317,24 +320,36 @@ func connectError(status int, raw []byte, retryAfterHint ...int) error {
 		retryAfter = retryAfterSeconds(m)
 	}
 	switch {
-	case containsAny(low, "model blocked", "not included in weekly usage", "not available for your account", "not available for your plan", "ask your admin to enable access", "unsupported model", "model not found") || code == "model_blocked" || code == "model_not_found":
+	case originalStatus == http.StatusBadRequest || originalStatus == http.StatusUnauthorized || originalStatus == http.StatusForbidden || originalStatus == http.StatusNotFound || originalStatus == http.StatusTooManyRequests:
+		// Explicit upstream client statuses take precedence over text heuristics.
+		status = originalStatus
+		credentialScoped = credentialScoped || status == http.StatusUnauthorized
+	case code == "model_blocked" || code == "model_not_found":
 		status = http.StatusNotFound
 		code = "model_not_found"
-	case containsAny(low, "region") || code == "permission_denied":
+	case code == "permission_denied":
 		status = http.StatusForbidden
-	case code == "unauthenticated" || originalStatus == http.StatusUnauthorized || containsAny(low, "expired", "invalid user api key"):
+	case code == "unauthenticated":
 		status = http.StatusUnauthorized
 		credentialScoped = true
-	case code == "resource_exhausted" || containsAny(low, "quota", "rate limit", "usage limit"):
+	case code == "resource_exhausted":
 		status = http.StatusTooManyRequests
-		// Rate limits and model quotas can be scoped to a single model. Keep
-		// account-level cooldown only when upstream says so explicitly or the
-		// message clearly describes a subscription/account-wide limit.
-		credentialScoped = credentialScoped || containsAny(low, "account quota", "account-wide", "account wide", "subscription quota", "subscription limit", "spend limit", "monthly quota", "weekly quota")
-	case containsAny(low, "too long", "context length", "too many tokens") || code == "invalid_argument":
+	case code == "invalid_argument":
 		status = http.StatusBadRequest
 	case code == "unavailable":
 		status = http.StatusServiceUnavailable
+	case code == "" && (low == "model blocked" || strings.HasPrefix(low, "model blocked:")):
+		status = http.StatusNotFound
+		code = "model_not_found"
+	case code == "" && containsAny(low, "region"):
+		status = http.StatusForbidden
+	case code == "" && containsAny(low, "expired", "invalid user api key"):
+		status = http.StatusUnauthorized
+		credentialScoped = true
+	case code == "" && containsAny(low, "quota", "rate limit", "usage limit"):
+		status = http.StatusTooManyRequests
+	case code == "" && containsAny(low, "too long", "context length", "too many tokens"):
+		status = http.StatusBadRequest
 	default:
 		// Keep the transport status for unknown upstream codes. A 200 end frame
 		// carrying an error has no useful HTTP status, so surface it as 502.
@@ -351,6 +366,24 @@ func connectError(status int, raw []byte, retryAfterHint ...int) error {
 		retryAfter = headerRetryAfter
 	}
 	return failureDetails(status, code, msg, retryableStatus(status), retryAfter, credentialScoped)
+}
+
+func successfulEndMetadata(m map[string]any) bool {
+	for key, value := range m {
+		switch key {
+		case "metadata":
+			if object(value) == nil {
+				return false
+			}
+		case "error":
+			if value != nil {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func retryAfterSeconds(m map[string]any) int {
