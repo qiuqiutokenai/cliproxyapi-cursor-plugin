@@ -101,4 +101,4 @@ kubectl -n <namespace> rollout status deployment/<cpa-deployment>
 
 ## 本地验证与正式发布边界
 
-本包已执行的检查以 `BUILDINFO.json` 为准；构建用的 Linux 二进制是新 0.1.4，不能把旧 0.1.3 改名冒用。正式公开的五平台 GitHub Release 仍需现有 CI 在各平台构建、C ABI 检查和全包校验；本交付只包含实际构建的目标平台，没有推送代码、打 tag 或创建公开 Release。
+本包已执行的检查以 `BUILDINFO.json` 为准；构建用的 Linux 二进制是新 0.1.4，不能把旧 0.1.3 改名冒用。正式公开的五平台 GitHub Release 由仓库的 `v0.1.4` 标签工作流在各平台构建、执行 C ABI 检查并完成全包校验；本地交付目录只包含其中实际构建的目标平台。
