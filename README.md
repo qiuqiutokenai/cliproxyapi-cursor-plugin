@@ -73,9 +73,12 @@ the separate bidirectional `AgentService/Run` endpoint. RunSSE/BidiAppend and
 stateless history reconstruction stay in use. No automatic retry is added when
 a protocol or upstream error occurs.
 
-Connection reuse depends on CPA's configured proxy, credential pool and context
-transport. In CPA v8.0.66 an explicit proxy without a credential pool can still
-create a new transport for each operation. This option does not create a
+Connection reuse depends on CPA's proxy and context transport. Its C ABI HTTP
+callback currently passes no credential to the host client, so API-key pool
+settings do not enable an account pool for this callback. An explicit global
+proxy can still create a new transport per operation; a shared context/default
+transport may reuse connections when no explicit proxy takes precedence.
+This option does not create a
 plugin-owned connection pool or guarantee reuse, lower latency or fewer 503s.
 Local tests cover HTTP/1.1, HTTP/2, concurrent RunSSE/BidiAppend, cancellation and
 host-provided account/proxy isolation; real Cursor endpoint support has not been

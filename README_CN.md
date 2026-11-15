@@ -68,8 +68,10 @@ plugins:
 代理、日志、TLS、连接和取消仍由 CPA 管理。Cursor 请求继续使用 RunSSE/BidiAppend
 与完整历史重建，不切换到另一套双向 `AgentService/Run` 协议，也不增加错误后的自动重试。
 
-连接能否复用取决于 CPA 的代理、凭据连接池和 context transport。CPA v8.0.66
-的显式代理路径在没有凭据连接池时，仍可能逐次新建 transport。此选项不会创建插件私有
+连接能否复用取决于 CPA 的代理和 context transport。当前 C ABI HTTP 回调没有把
+凭据传给宿主 HTTP client，所以 API-key 连接池配置不会为该回调启用账号连接池。
+显式全局代理仍可能逐次新建 transport；没有显式代理优先时，共享 context/default
+transport 才可能复用连接。此选项不会创建插件私有
 连接池，也不保证降低延迟或 503。已做本地 HTTP/1.1、HTTP/2、RunSSE/BidiAppend
 并行、取消和宿主账号/代理隔离测试，尚未验证真实 Cursor 业务端点兼容性。
 设为 `http1` 或移除该项即可恢复默认；配置更新不会改变已开始请求的传输模式。

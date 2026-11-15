@@ -38,8 +38,11 @@ plugins:
 
 Use `http1` or remove `http-transport` to restore the compatibility default. CPA
 still selects proxies, TLS, connections, logging and cancellation. Connection
-reuse depends on CPA's credential pool/context/proxy configuration; omitting the
-wire profile does not itself create a shared pool. RunSSE/BidiAppend and stateless
+reuse depends on CPA's context/proxy configuration. The current C ABI callback
+passes no credential to its host HTTP client, so API-key account-pool settings do
+not apply to that callback. Explicit global proxies may still create a transport
+per operation; omitting the wire profile does not itself create a shared pool.
+RunSSE/BidiAppend and stateless
 history reconstruction remain in use.
 
 ## Validation
