@@ -320,8 +320,8 @@ func connectError(status int, raw []byte, retryAfterHint ...int) error {
 		retryAfter = retryAfterSeconds(m)
 	}
 	switch {
-	case originalStatus == http.StatusBadRequest || originalStatus == http.StatusUnauthorized || originalStatus == http.StatusForbidden || originalStatus == http.StatusNotFound || originalStatus == http.StatusTooManyRequests:
-		// Explicit upstream client statuses take precedence over text heuristics.
+	case originalStatus >= 400 && originalStatus <= 599:
+		// Explicit upstream HTTP errors take precedence over text heuristics.
 		status = originalStatus
 		credentialScoped = credentialScoped || status == http.StatusUnauthorized
 	case code == "model_blocked" || code == "model_not_found":

@@ -23,6 +23,7 @@ func TestConnectErrorPreservesExplicitClassification(t *testing.T) {
 		{"unknown quota code", 429, `{"code":"usage_model_mismatch","message":"not included in weekly usage"}`, 429, "usage_model_mismatch"},
 		{"model blocked http", 403, `{"code":"model_blocked","message":"Model Blocked"}`, 403, "model_blocked"},
 		{"model transport quota", 429, `{"message":"model not found for weekly quota"}`, 429, "cursor_error"},
+		{"server response with model text", 503, `{"code":"backend_overloaded","message":"Model blocked: quota expired"}`, 503, "backend_overloaded"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := connectError(tc.status, []byte(tc.body))
