@@ -166,6 +166,9 @@ func streamReply(s *requestScope, streamID string, events <-chan runEvent, first
 		fields := map[string]any{"stream_id": streamID}
 		if err != nil {
 			fields["error"] = err.Error()
+			// Keep the legacy error string for older CPA hosts while exposing
+			// status/code/retry metadata to v8 stream bridges.
+			fields["error_detail"] = errorDetail(err)
 		}
 		_ = s.call("host.stream.close", fields, nil)
 	}
@@ -288,7 +291,7 @@ func (p *pluginRuntime) run(s *requestScope, token string, model modelResolution
 						err = failure(502, "Cursor append response exceeds limit")
 					}
 					if err == nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
-						err = connectError(resp.StatusCode, raw)
+						err = connectError(resp.StatusCode, raw, retryAfterHeader(resp.Header.Get("Retry-After")))
 					}
 				}
 				if fromQueue {
@@ -312,7 +315,7 @@ func (p *pluginRuntime) run(s *requestScope, token string, model modelResolution
 			if readErr != nil {
 				err = readErr
 			} else {
-				err = connectError(resp.StatusCode, raw)
+				err = connectError(resp.StatusCode, raw, retryAfterHeader(resp.Header.Get("Retry-After")))
 			}
 		}
 		if err != nil {

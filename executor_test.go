@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -120,6 +121,117 @@ func TestNativeConnectStatusMapping(t *testing.T) {
 	if connectError(200, []byte(`{}`)) != nil {
 		t.Fatal("successful end frame failed")
 	}
+}
+
+func TestNativeConnectErrorPreservesStructuredDetails(t *testing.T) {
+	tests := []struct {
+		name           string
+		status         int
+		body           string
+		wantStatus     int
+		wantCode       string
+		wantRetryable  bool
+		wantRetryAfter int
+		wantCredential bool
+	}{
+		{name: "unauthenticated", status: 401, body: `{"error":{"code":"unauthenticated","message":"Invalid User API Key"}}`, wantStatus: 401, wantCode: "unauthenticated", wantCredential: true},
+		{name: "permission denied", status: 403, body: `{"error":{"code":"permission_denied","message":"forbidden"}}`, wantStatus: 403, wantCode: "permission_denied"},
+		{name: "resource exhausted", status: 429, body: `{"error":{"code":"resource_exhausted","message":"quota exceeded","retry_after_seconds":19}}`, wantStatus: 429, wantCode: "resource_exhausted", wantRetryable: true, wantRetryAfter: 19},
+		{name: "account quota", status: 429, body: `{"error":{"code":"resource_exhausted","message":"account-wide quota exceeded"}}`, wantStatus: 429, wantCode: "resource_exhausted", wantRetryable: true, wantCredential: true},
+		{name: "unknown service code", status: 503, body: `{"error":{"code":"backend_overloaded","message":"try again"}}`, wantStatus: 503, wantCode: "backend_overloaded", wantRetryable: true},
+		{name: "model blocked end frame", status: 200, body: `{"code":"model_blocked","message":"Model Blocked: ask your admin to enable access to Claude Fable 5."}`, wantStatus: 404, wantCode: "model_not_found"},
+		{name: "nested model blocked end frame", status: 200, body: `{"error":{"message":"Model Blocked: Please ask your admin to enable access"}}`, wantStatus: 404, wantCode: "model_not_found"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := connectError(tt.status, []byte(tt.body))
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if got := errorStatus(err); got != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (%v)", got, tt.wantStatus, err)
+			}
+			var detail *statusError
+			if !errors.As(err, &detail) {
+				t.Fatalf("error does not retain statusError: %T", err)
+			}
+			if detail.code != tt.wantCode || detail.retryable != tt.wantRetryable || detail.retryAfterSeconds != tt.wantRetryAfter || detail.credentialScoped != tt.wantCredential {
+				t.Fatalf("details = %+v, want code=%q retryable=%t retry_after=%d credential_scoped=%t", detail, tt.wantCode, tt.wantRetryable, tt.wantRetryAfter, tt.wantCredential)
+			}
+		})
+	}
+	if err := connectError(200, []byte(`{}`)); err != nil {
+		t.Fatalf("empty end frame should succeed: %v", err)
+	}
+	if err := connectError(200, []byte(`not-json`)); errorStatus(err) != 502 {
+		t.Fatalf("malformed end frame status = %d, want 502 (%v)", errorStatus(err), err)
+	}
+	err := connectError(429, []byte(`busy`), 11)
+	var detail *statusError
+	if !errors.As(err, &detail) || detail.retryAfterSeconds != 11 {
+		t.Fatalf("Retry-After hint was lost: %+v", detail)
+	}
+}
+
+func TestStructuredErrorEnvelope(t *testing.T) {
+	err := failureDetails(429, "resource_exhausted", "quota exceeded", true, 23, true)
+	var got struct {
+		OK    bool      `json:"ok"`
+		Error *rpcError `json:"error"`
+	}
+	if unmarshalErr := json.Unmarshal(errorEnvelope(err), &got); unmarshalErr != nil {
+		t.Fatal(unmarshalErr)
+	}
+	if got.OK || got.Error == nil {
+		t.Fatalf("invalid error envelope: %+v", got)
+	}
+	if got.Error.Code != "resource_exhausted" || got.Error.HTTPStatus != 429 || !got.Error.Retryable || got.Error.RetryAfterSeconds != 23 || !got.Error.CredentialScoped {
+		t.Fatalf("lost error detail: %+v", got.Error)
+	}
+}
+
+func TestRetryAfterHeaderSeconds(t *testing.T) {
+	if got := retryAfterHeader("17"); got != 17 {
+		t.Fatalf("Retry-After seconds = %d, want 17", got)
+	}
+	if got := retryAfterHeader("invalid"); got != 0 {
+		t.Fatalf("invalid Retry-After = %d, want 0", got)
+	}
+}
+
+func TestStreamCloseCarriesStructuredErrorDetail(t *testing.T) {
+	p := newTestRuntime(t)
+	var closeFields map[string]any
+	host := func(method string, raw []byte) ([]byte, error) {
+		var fields map[string]any
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return nil, err
+		}
+		if method == "host.stream.close" {
+			closeFields = fields
+		}
+		return envelope(message{Result: encodeJSON(map[string]any{})}), nil
+	}
+	s := p.newScope(host, "stream-context")
+	streamReply(s, "stream-1", nil, runEvent{err: failureDetails(429, "resource_exhausted", "quota exceeded", true, 7, true)}, "chatcmpl-test", "cursor/test", 1)
+	if closeFields == nil {
+		t.Fatal("host.stream.close was not called")
+	}
+	if closeFields["error"] != "quota exceeded" {
+		t.Fatalf("legacy error was not retained: %+v", closeFields)
+	}
+	detail, ok := closeFields["error_detail"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing structured error detail: %+v", closeFields)
+	}
+	if str(detail["code"]) != "resource_exhausted" || int(num(detail["http_status"])) != 429 || !boolValue(detail["retryable"]) || int(num(detail["retry_after_seconds"])) != 7 || !boolValue(detail["credential_scoped"]) {
+		t.Fatalf("unexpected structured detail: %+v", detail)
+	}
+}
+
+func boolValue(v any) bool {
+	b, _ := v.(bool)
+	return b
 }
 func TestNativeMaxModeRetryIsOnlyForRequiredMode(t *testing.T) {
 	for _, msg := range []string{"MAX_MODE_REQUIRED", "this model requires max mode", "max mode required"} {

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type requestScope struct {
@@ -55,7 +57,11 @@ func (s *requestScope) call(method string, fields map[string]any, result any) er
 			if status < 400 {
 				status = 502
 			}
-			return failure(status, "%s", env.Error.Message)
+			message := env.Error.Message
+			if message == "" {
+				message = "CPA HTTP callback failed"
+			}
+			return failureDetails(status, env.Error.Code, message, env.Error.Retryable, env.Error.RetryAfterSeconds, env.Error.CredentialScoped)
 		}
 		return failure(502, "CPA HTTP callback failed")
 	}
@@ -236,7 +242,7 @@ func (s *requestScope) jsonClient(ctx context.Context, method, path, token strin
 		return nil, failure(502, "Cursor JSON response exceeds the size limit")
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, connectError(resp.StatusCode, raw)
+		return nil, connectError(resp.StatusCode, raw, retryAfterHeader(resp.Header.Get("Retry-After")))
 	}
 	m, err := jsonObject(raw)
 	if err != nil {
@@ -244,15 +250,43 @@ func (s *requestScope) jsonClient(ctx context.Context, method, path, token strin
 	}
 	return m, nil
 }
-func connectError(status int, raw []byte) error {
-	m, _ := jsonObject(raw)
-	if nested := object(m["error"]); nested != nil {
-		m = nested
+func connectError(status int, raw []byte, retryAfterHint ...int) error {
+	originalStatus := status
+	headerRetryAfter := 0
+	if len(retryAfterHint) > 0 && retryAfterHint[0] > 0 {
+		headerRetryAfter = retryAfterHint[0]
 	}
-	code, msg := str(m["code"]), str(m["message"])
-	for _, d := range array(m["details"]) {
+	trimmed := strings.TrimSpace(string(raw))
+	if originalStatus >= 200 && originalStatus < 300 && trimmed == "" {
+		return nil
+	}
+
+	var m map[string]any
+	if trimmed != "" {
+		if err := json.Unmarshal(raw, &m); err != nil || m == nil {
+			if originalStatus >= 200 && originalStatus < 300 {
+				return failureDetails(502, "invalid_cursor_response", "Cursor returned malformed error payload", false, headerRetryAfter, false)
+			}
+			return failureDetails(originalStatus, "cursor_http_error", trimmed, retryableStatus(originalStatus), headerRetryAfter, originalStatus == http.StatusUnauthorized)
+		}
+	}
+	if m == nil {
+		m = map[string]any{}
+	}
+	root := m
+	if nested := object(m["error"]); nested != nil {
+		root = nested
+	}
+	code, msg := strings.TrimSpace(str(root["code"])), strings.TrimSpace(str(root["message"]))
+	if code == "" {
+		code = strings.TrimSpace(str(m["code"]))
+	}
+	if msg == "" {
+		msg = strings.TrimSpace(str(m["message"]))
+	}
+	for _, d := range array(root["details"]) {
 		detail := object(object(object(d)["debug"])["details"])
-		title, text := str(detail["title"]), str(detail["detail"])
+		title, text := strings.TrimSpace(str(detail["title"])), strings.TrimSpace(str(detail["detail"]))
 		if title != "" || text != "" {
 			msg = title
 			if text != "" {
@@ -266,33 +300,94 @@ func connectError(status int, raw []byte) error {
 	if msg == "" {
 		msg = code
 	}
-	if msg == "" {
-		msg = string(raw)
-	}
-	if msg == "" {
-		msg = http.StatusText(status)
-	}
-	low := strings.ToLower(msg)
-	switch {
-	case containsAny(low, "region"):
-		status = 403
-	case code == "permission_denied":
-		status = 403
-	case code == "unauthenticated" || status == 401 || containsAny(low, "expired"):
-		status = 401
-	case code == "resource_exhausted" || containsAny(low, "quota", "rate limit", "usage limit"):
-		status = 429
-	case containsAny(low, "too long", "context length", "too many tokens") || code == "invalid_argument":
-		status = 400
-	case code == "unavailable":
-		status = 503
-	case code != "":
-		status = 502
-	}
-	if status >= 200 && status < 300 {
+	if msg == "" && originalStatus >= 200 && originalStatus < 300 && len(m) == 0 {
 		return nil
 	}
-	return failure(status, "%s", msg)
+	if msg == "" {
+		msg = trimmed
+	}
+	if msg == "" {
+		msg = http.StatusText(originalStatus)
+	}
+
+	low := strings.ToLower(msg)
+	credentialScoped := boolAny(root["credential_scoped"]) || boolAny(root["credentialScoped"]) || boolAny(m["credential_scoped"]) || boolAny(m["credentialScoped"])
+	retryAfter := retryAfterSeconds(root)
+	if retryAfter == 0 {
+		retryAfter = retryAfterSeconds(m)
+	}
+	switch {
+	case containsAny(low, "model blocked", "not included in weekly usage", "not available for your account", "not available for your plan", "ask your admin to enable access", "unsupported model", "model not found") || code == "model_blocked" || code == "model_not_found":
+		status = http.StatusNotFound
+		code = "model_not_found"
+	case containsAny(low, "region") || code == "permission_denied":
+		status = http.StatusForbidden
+	case code == "unauthenticated" || originalStatus == http.StatusUnauthorized || containsAny(low, "expired", "invalid user api key"):
+		status = http.StatusUnauthorized
+		credentialScoped = true
+	case code == "resource_exhausted" || containsAny(low, "quota", "rate limit", "usage limit"):
+		status = http.StatusTooManyRequests
+		// Rate limits and model quotas can be scoped to a single model. Keep
+		// account-level cooldown only when upstream says so explicitly or the
+		// message clearly describes a subscription/account-wide limit.
+		credentialScoped = credentialScoped || containsAny(low, "account quota", "account-wide", "account wide", "subscription quota", "subscription limit", "spend limit", "monthly quota", "weekly quota")
+	case containsAny(low, "too long", "context length", "too many tokens") || code == "invalid_argument":
+		status = http.StatusBadRequest
+	case code == "unavailable":
+		status = http.StatusServiceUnavailable
+	default:
+		// Keep the transport status for unknown upstream codes. A 200 end frame
+		// carrying an error has no useful HTTP status, so surface it as 502.
+		if originalStatus >= 200 && originalStatus < 300 {
+			status = http.StatusBadGateway
+		} else {
+			status = originalStatus
+		}
+	}
+	if status < 400 {
+		status = http.StatusBadGateway
+	}
+	if retryAfter == 0 {
+		retryAfter = headerRetryAfter
+	}
+	return failureDetails(status, code, msg, retryableStatus(status), retryAfter, credentialScoped)
+}
+
+func retryAfterSeconds(m map[string]any) int {
+	for _, key := range []string{"retry_after_seconds", "retryAfterSeconds"} {
+		if value := int(num(m[key])); value > 0 {
+			return value
+		}
+	}
+	return 0
+}
+
+func boolAny(v any) bool {
+	b, _ := v.(bool)
+	return b
+}
+
+func retryAfterHeader(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
+		return seconds
+	}
+	when, err := http.ParseTime(value)
+	if err != nil {
+		return 0
+	}
+	remaining := time.Until(when)
+	if remaining <= 0 {
+		return 0
+	}
+	seconds := int(remaining / time.Second)
+	if remaining%time.Second != 0 {
+		seconds++
+	}
+	return seconds
 }
 func containsAny(s string, parts ...string) bool {
 	for _, p := range parts {

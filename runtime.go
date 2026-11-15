@@ -30,22 +30,40 @@ const catalogClientType = "desktop"
 
 type hostCaller func(string, []byte) ([]byte, error)
 type rpcError struct {
-	Code       string `json:"code"`
-	Message    string `json:"message"`
-	HTTPStatus int    `json:"http_status,omitempty"`
+	Code              string `json:"code"`
+	Message           string `json:"message"`
+	HTTPStatus        int    `json:"http_status,omitempty"`
+	Retryable         bool   `json:"retryable,omitempty"`
+	RetryAfterSeconds int    `json:"retry_after_seconds,omitempty"`
+	CredentialScoped  bool   `json:"credential_scoped,omitempty"`
 }
 type message struct {
 	Result json.RawMessage
 	Error  *rpcError
 }
 type statusError struct {
-	status  int
-	message string
+	status            int
+	message           string
+	code              string
+	retryable         bool
+	retryAfterSeconds int
+	credentialScoped  bool
 }
 
 func (e *statusError) Error() string { return e.message }
 func failure(status int, format string, args ...any) error {
-	return &statusError{status, fmt.Sprintf(format, args...)}
+	return &statusError{status: status, message: fmt.Sprintf(format, args...)}
+}
+
+func failureDetails(status int, code, message string, retryable bool, retryAfterSeconds int, credentialScoped bool) error {
+	return &statusError{
+		status:            status,
+		message:           message,
+		code:              strings.TrimSpace(code),
+		retryable:         retryable,
+		retryAfterSeconds: retryAfterSeconds,
+		credentialScoped:  credentialScoped,
+	}
 }
 func errorStatus(err error) int {
 	var e *statusError
@@ -77,7 +95,32 @@ func resultEnvelope(value any) []byte {
 	return envelope(message{Result: raw})
 }
 func errorEnvelope(err error) []byte {
-	return envelope(message{Error: &rpcError{Code: "cursor_error", Message: err.Error(), HTTPStatus: errorStatus(err)}})
+	detail := errorDetail(err)
+	return envelope(message{Error: &detail})
+}
+
+func retryableStatus(status int) bool {
+	return status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= 500 && status <= 599
+}
+
+func errorDetail(err error) rpcError {
+	if err == nil {
+		return rpcError{}
+	}
+	detail := rpcError{Code: "cursor_error", Message: err.Error(), HTTPStatus: errorStatus(err)}
+	var statusErr *statusError
+	if errors.As(err, &statusErr) && statusErr != nil {
+		if statusErr.code != "" {
+			detail.Code = statusErr.code
+		}
+		detail.Retryable = statusErr.retryable
+		detail.RetryAfterSeconds = statusErr.retryAfterSeconds
+		detail.CredentialScoped = statusErr.credentialScoped
+	}
+	if !detail.Retryable {
+		detail.Retryable = retryableStatus(detail.HTTPStatus)
+	}
+	return detail
 }
 
 type rpcRequest struct {
