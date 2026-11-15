@@ -12,21 +12,22 @@ import (
 )
 
 type requestScope struct {
-	p          *pluginRuntime
-	ctx        context.Context
-	cancel     context.CancelFunc
-	host       hostCaller
-	callbackID string
-	mu         sync.Mutex
-	closed     bool
-	bodies     map[*hostBody]struct{}
-	pending    sync.WaitGroup
+	p                    *pluginRuntime
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	host                 hostCaller
+	callbackID           string
+	hostDefaultTransport bool
+	mu                   sync.Mutex
+	closed               bool
+	bodies               map[*hostBody]struct{}
+	pending              sync.WaitGroup
 }
 
 func (p *pluginRuntime) newScope(host hostCaller, id string) *requestScope {
 	ctx, cancel := context.WithCancel(p.ctx)
-	s := &requestScope{p: p, ctx: ctx, cancel: cancel, host: host, callbackID: id, bodies: make(map[*hostBody]struct{})}
 	p.mu.Lock()
+	s := &requestScope{p: p, ctx: ctx, cancel: cancel, host: host, callbackID: id, bodies: make(map[*hostBody]struct{}), hostDefaultTransport: p.hostDefaultTransport}
 	p.scopes[s] = struct{}{}
 	p.mu.Unlock()
 	return s
@@ -134,7 +135,11 @@ func (s *requestScope) do(ctx context.Context, method, url string, h http.Header
 		Headers http.Header `json:"headers"`
 		ID      string      `json:"stream_id"`
 	}
-	err := s.call("host.http.do_stream", map[string]any{"operation_id": opened.ID, "method": method, "url": url, "headers": h, "body": payload, "wire_profile": map[string]any{"http1_only": true}}, &response)
+	fields := map[string]any{"operation_id": opened.ID, "method": method, "url": url, "headers": h, "body": payload}
+	if !s.hostDefaultTransport {
+		fields["wire_profile"] = map[string]any{"http1_only": true}
+	}
+	err := s.call("host.http.do_stream", fields, &response)
 	if err != nil {
 		_ = b.Close()
 		return nil, err

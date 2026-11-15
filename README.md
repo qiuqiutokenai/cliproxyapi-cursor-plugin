@@ -53,6 +53,35 @@ Set `dir` to the actual path, restart CPA and check its loading logs.
 For Docker, mount the plugin directory and use its container path.
 Manual installation requires the compiled library; CPA cannot load a source directory or a GitHub repository URL directly.
 
+## Optional host transport
+
+The default `http1` mode keeps the existing HTTP/1.1 wire profile. To test CPA's
+normal HTTP transport without changing CPA, opt in explicitly:
+
+```yaml
+plugins:
+  configs:
+    spx-cursor:
+      enabled: true
+      http-transport: host-default
+```
+
+`host-default` omits the wire profile on host HTTP callbacks. CPA still owns
+proxy selection, request logging, TLS, connections and cancellation. The host
+may negotiate HTTP/2 or use HTTP/1.1; this does not switch the Cursor protocol to
+the separate bidirectional `AgentService/Run` endpoint. RunSSE/BidiAppend and
+stateless history reconstruction stay in use. No automatic retry is added when
+a protocol or upstream error occurs.
+
+Connection reuse depends on CPA's configured proxy, credential pool and context
+transport. In CPA v8.0.66 an explicit proxy without a credential pool can still
+create a new transport for each operation. This option does not create a
+plugin-owned connection pool or guarantee reuse, lower latency or fewer 503s.
+Local tests cover HTTP/1.1, HTTP/2, concurrent RunSSE/BidiAppend, cancellation and
+host-provided account/proxy isolation; real Cursor endpoint support has not been
+verified. Set `http-transport: http1` or remove the option to restore the default.
+Each active request keeps the transport mode it started with during reconfigure.
+
 ## Sign in
 
 Choose Cursor login in CPA. If the UI has no entry, use CPA's v8 management API:

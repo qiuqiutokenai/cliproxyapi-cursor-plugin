@@ -51,6 +51,29 @@ plugins:
 将 `dir` 改为实际路径，重启 CPA 后检查加载日志。Docker 部署需挂载插件目录，配置填写容器内路径。
 手动安装需放入编译后的动态库；仅放入源码或填写 GitHub 仓库地址不会加载插件。
 
+## 可选宿主传输
+
+默认 `http1` 模式保留现有的 HTTP/1.1 wire profile。需要在测试环境使用 CPA
+正常传输路径时，可显式启用：
+
+```yaml
+plugins:
+  configs:
+    spx-cursor:
+      enabled: true
+      http-transport: host-default
+```
+
+`host-default` 不发送 wire profile，由 CPA 决定 HTTP/2 协商或 HTTP/1.1 回退；
+代理、日志、TLS、连接和取消仍由 CPA 管理。Cursor 请求继续使用 RunSSE/BidiAppend
+与完整历史重建，不切换到另一套双向 `AgentService/Run` 协议，也不增加错误后的自动重试。
+
+连接能否复用取决于 CPA 的代理、凭据连接池和 context transport。CPA v8.0.66
+的显式代理路径在没有凭据连接池时，仍可能逐次新建 transport。此选项不会创建插件私有
+连接池，也不保证降低延迟或 503。已做本地 HTTP/1.1、HTTP/2、RunSSE/BidiAppend
+并行、取消和宿主账号/代理隔离测试，尚未验证真实 Cursor 业务端点兼容性。
+设为 `http1` 或移除该项即可恢复默认；配置更新不会改变已开始请求的传输模式。
+
 ## 登录
 
 在 CPA 中选择 Cursor 登录。若界面没有入口，可使用 CPA v8 管理接口：

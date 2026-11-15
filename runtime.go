@@ -124,6 +124,7 @@ func errorDetail(err error) rpcError {
 }
 
 type rpcRequest struct {
+	ConfigYAML       []byte `json:"config_yaml"`
 	BasePath         string
 	ResourceBasePath string
 	Method           string
@@ -174,17 +175,18 @@ func parseRequest(raw []byte, method string) (rpcRequest, error) {
 }
 
 type pluginRuntime struct {
-	ctx            context.Context
-	cancel         context.CancelFunc
-	mu             sync.Mutex
-	closed         bool
-	scopes         map[*requestScope]struct{}
-	logins         map[string]*loginFlow
-	managementBase string
-	resourceBase   string
-	models         map[string]modelCache
-	keys           map[string]keyCache
-	now            func() time.Time
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	mu                   sync.Mutex
+	closed               bool
+	scopes               map[*requestScope]struct{}
+	logins               map[string]*loginFlow
+	managementBase       string
+	resourceBase         string
+	models               map[string]modelCache
+	keys                 map[string]keyCache
+	now                  func() time.Time
+	hostDefaultTransport bool
 }
 
 func newRuntime() *pluginRuntime {
@@ -218,7 +220,10 @@ func dispatch(p *pluginRuntime, method string, raw json.RawMessage, host hostCal
 	var value any
 	switch method {
 	case "plugin.register", "plugin.reconfigure":
-		value = registration()
+		err = p.configureTransport(req.ConfigYAML)
+		if err == nil {
+			value = registration()
+		}
 	case "executor.identifier", "auth.identifier", "quota.identifier":
 		value = map[string]any{"identifier": "cursor"}
 	case "plugin.quiesce":
@@ -274,7 +279,7 @@ func dispatch(p *pluginRuntime, method string, raw json.RawMessage, host hostCal
 	return resultEnvelope(value)
 }
 func registration() any {
-	return map[string]any{"schema_version": 1, "metadata": map[string]any{"Name": "Cursor", "Version": version, "Author": "spx", "GitHubRepository": "https://github.com/spancerxing/cliproxyapi-cursor-plugin", "Logo": pluginLogo, "ConfigFields": []any{}}, "capabilities": map[string]any{"management_api": true, "auth_provider": true, "model_provider": true, "quota_provider": true, "executor": true, "executor_model_scope": "oauth", "executor_input_formats": []string{"chat-completions"}, "executor_output_formats": []string{"chat-completions"}}}
+	return map[string]any{"schema_version": 1, "metadata": map[string]any{"Name": "Cursor", "Version": version, "Author": "spx", "GitHubRepository": "https://github.com/spancerxing/cliproxyapi-cursor-plugin", "Logo": pluginLogo, "ConfigFields": []any{map[string]any{"Name": "http-transport", "Type": "enum", "Default": "http1", "EnumValues": []string{"http1", "host-default"}, "Description": "HTTP transport: http1 preserves compatibility; host-default delegates protocol negotiation and connection reuse to CPA."}}}, "capabilities": map[string]any{"management_api": true, "auth_provider": true, "model_provider": true, "quota_provider": true, "executor": true, "executor_model_scope": "oauth", "executor_input_formats": []string{"chat-completions"}, "executor_output_formats": []string{"chat-completions"}}}
 }
 func randomID() string {
 	var b [16]byte

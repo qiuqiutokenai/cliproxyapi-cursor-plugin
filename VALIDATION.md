@@ -1,5 +1,34 @@
 # Native version 0.1.1 validation
 
+## Optional host transport candidate (unreleased)
+
+The plugin can opt into CPA's normal host transport with
+`http-transport: host-default`; the default remains `http1`. The setting is read
+from the ABI lifecycle `config_yaml` payload, advertised as an enum ConfigField,
+validated before replacement and snapshotted per request scope. Invalid reloads
+preserve the previous configuration. Parsing adds the pinned pure-Go yaml.v3
+dependency; the earlier dependency-free validation below describes the earlier
+release, not this candidate.
+
+Real local TLS sockets behind a test callback host cover HTTP/2 negotiation,
+HTTP/1.1 fallback, reuse across request scopes, concurrent RunSSE/BidiAppend,
+stream cancellation and separate host-provided account transports. A local HTTP
+proxy fixture checks that the plugin still delegates proxy selection to its
+host. The fixture supplies an explicitly shared transport: these tests do not
+assert that every CPA v8.0.66 proxy or OAuth configuration pools connections.
+The wire-profile compatibility fixture deliberately models fresh HTTP/1.1
+connections. No private HTTP client or pool is added to the plugin.
+
+Local Windows AMD64 validation passed: `go test ./...`, `go test -race ./...`,
+`go vet ./...`, `go build -buildmode=c-shared -o dist/spx-cursor.dll .` and
+`python test/abi-smoke.py dist/spx-cursor.dll`.
+
+The option has not been tested against real Cursor business endpoints or a
+production deployment. Successful local HTTP/2 negotiation does not prove that
+Cursor accepts RunSSE/BidiAppend over HTTP/2, or that switching transport reduces
+remote 503s. Native retained Runs and deferred dashboard accounting are outside
+this change.
+
 ## Browser renewal follow-up (2026-11-04)
 
 PR #2 adds browser-token renewal through CPA's refresh scheduler. The merged
